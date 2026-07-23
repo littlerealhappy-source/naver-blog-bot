@@ -1,4 +1,4 @@
-# 텔레그램 채널로 Claude Code 실행
+﻿# 텔레그램 채널로 Claude Code 실행
 # 사용법: 이 파일을 우클릭 → "PowerShell에서 실행"  또는  터미널에서  .\start-telegram.ps1
 
 $ErrorActionPreference = "Stop"
