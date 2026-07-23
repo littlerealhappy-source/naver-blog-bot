@@ -1,0 +1,31 @@
+# --- 비밀정보 (절대 커밋 금지) ---
+*.env
+.env
+.env.*
+naver_session.json
+*_session.json
+*.token
+*.key
+*.pem
+credentials*.json
+
+# Claude Code 로컬 설정 (권한 목록 등, 머신마다 다름)
+.claude/settings.local.json
+
+# --- 파이썬 ---
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# --- 실행 산출물 ---
+debug_output/
+inspect_output/
+login_error.txt
+*.log
+
+# --- OS ---
+Thumbs.db
+desktop.ini

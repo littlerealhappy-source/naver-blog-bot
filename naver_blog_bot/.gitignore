@@ -1,0 +1,6 @@
+venv/
+naver_session.json
+debug_output/
+inspect_output/
+login_error.txt
+__pycache__/
