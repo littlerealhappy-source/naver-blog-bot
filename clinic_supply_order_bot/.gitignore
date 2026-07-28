@@ -1,0 +1,5 @@
+venv/
+*_session.json
+debug_output/
+login_error.txt
+__pycache__/
