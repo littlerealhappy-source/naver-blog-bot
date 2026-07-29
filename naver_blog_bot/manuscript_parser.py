@@ -125,10 +125,13 @@ def parse_manuscript(path: str, emphasis_color: str = DEFAULT_EMPHASIS_COLOR):
         line = raw_line.rstrip()
         stripped = line.strip()
 
-        # 메타 섹션 처리
-        if stripped.startswith("[") and stripped.endswith("]"):
+        # 메타 섹션 처리. "[링크 걸 위치] (2곳만)"처럼 대괄호 뒤에 부가
+        # 설명이 붙는 경우가 있어, 줄 전체가 아니라 첫 "[...]" 부분만
+        # 섹션 이름으로 삼는다.
+        section_match = re.match(r"^(\[[^\]]+\])", stripped)
+        if section_match:
             flush_group()
-            meta_section = stripped
+            meta_section = section_match.group(1)
             continue
         if meta_section == "[해시태그]":
             if stripped:
