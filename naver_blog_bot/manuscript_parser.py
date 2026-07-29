@@ -15,6 +15,10 @@
   빈 줄             -> 문단 그룹 구분 (그룹 사이에만 빈 줄 여백)
   [해시태그] 섹션    -> #태그들 추출, 이후 본문 아님
   [권장 사진]/[글의 목적] -> 지시사항이므로 본문에서 제외
+  [링크 걸 위치] 섹션 -> 줄 형식: - "앵커문구" (설명) → URL
+                        해당 앵커문구가 있는 블록 바로 뒤에 링크 카드 삽입.
+                        URL이 http(s)로 시작하지 않으면(아직 미확정 등)
+                        명확한 오류로 알려준다.
 
 원고 내 줄바꿈 호흡을 살리기 위해, 그룹 안의 각 줄은 빈 줄 없이 이어지고
 그룹이 끝날 때만 빈 줄이 들어간다.
@@ -27,6 +31,7 @@ DEFAULT_EMPHASIS_COLOR = "#ff0010"
 
 _INLINE_PATTERN = re.compile(r"(\*\*(.+?)\*\*|\{색\}(.+?)\{색\}|==(.+?)==)", re.DOTALL)
 _LINK_PATTERN = re.compile(r"\{링크=([^}]+)\}(.*?)\{링크\}", re.DOTALL)
+_LINK_POSITION_PATTERN = re.compile(r'-\s*"([^"]+)"[^→]*→\s*(.+)$')
 
 
 def parse_inline_block(text: str, emphasis_color: str) -> tuple[list[dict], list[str]]:
@@ -87,6 +92,7 @@ def parse_manuscript(path: str, emphasis_color: str = DEFAULT_EMPHASIS_COLOR):
     title: str | None = None
     blocks: list[dict] = []
     tags: list[str] = []
+    link_positions: list[tuple[str, str]] = []  # (앵커 문구, URL)
 
     group: list[str] = []  # 현재 문단 그룹의 원본 줄들
     pending_links: list[str] = []
@@ -128,7 +134,12 @@ def parse_manuscript(path: str, emphasis_color: str = DEFAULT_EMPHASIS_COLOR):
             if stripped:
                 tags.extend(t.lstrip("#") for t in stripped.split() if t.startswith("#"))
             continue
-        if meta_section in ("[권장 사진]", "[글의 목적]"):
+        if meta_section == "[링크 걸 위치]":
+            m = _LINK_POSITION_PATTERN.match(stripped)
+            if m:
+                link_positions.append((m.group(1), m.group(2).strip()))
+            continue
+        if meta_section in ("[권장 사진]", "[글의 목적]", "[제목 후보 — 원장님이 확정]"):
             continue  # 지시사항 — 본문에 넣지 않음
 
         if not stripped:
@@ -161,23 +172,41 @@ def parse_manuscript(path: str, emphasis_color: str = DEFAULT_EMPHASIS_COLOR):
     if title is None:
         raise ValueError("원고에서 제목(# ...)을 찾지 못했습니다.")
 
+    if link_positions:
+        for anchor, url in link_positions:
+            if not url.startswith(("http://", "https://")):
+                raise ValueError(
+                    f"[링크 걸 위치] \"{anchor}\" 항목의 URL이 아직 확정되지 않았습니다: {url}\n"
+                    "실제 URL로 채운 뒤 다시 실행하세요."
+                )
+        blocks = _insert_after_anchors(blocks, link_positions, lambda url: {"type": "link_card", "url": url})
+
     return title, blocks, tags
+
+
+def _block_text(b: dict) -> str:
+    if b["type"] == "paragraph":
+        return "".join(r["text"] for r in b["runs"])
+    if b["type"] in ("quote", "subheading"):
+        return b["text"]
+    return ""
+
+
+def _insert_after_anchors(blocks: list[dict], anchors: list[tuple[str, str]], make_block):
+    """anchors: (본문 일부 문자열, make_block에 넘길 값). 해당 문자열이 포함된
+    블록 바로 뒤에 make_block(value)로 만든 블록을 삽입한 새 리스트를 반환."""
+    result = list(blocks)
+    for snippet, value in anchors:
+        for i, b in enumerate(result):
+            if snippet in _block_text(b):
+                result.insert(i + 1, make_block(value))
+                break
+        else:
+            raise ValueError(f"앵커 문구를 본문에서 찾지 못했습니다: {snippet}")
+    return result
 
 
 def insert_images_at_anchors(blocks: list[dict], anchors: list[tuple[str, str]]):
     """anchors: (본문 일부 문자열, 이미지 경로). 해당 문자열이 포함된
     블록 바로 뒤에 이미지 블록을 삽입한 새 리스트를 반환."""
-    result = list(blocks)
-    for snippet, image_path in anchors:
-        for i, b in enumerate(result):
-            text = ""
-            if b["type"] in ("paragraph",):
-                text = "".join(r["text"] for r in b["runs"])
-            elif b["type"] in ("quote", "subheading"):
-                text = b["text"]
-            if snippet in text:
-                result.insert(i + 1, {"type": "image", "path": image_path})
-                break
-        else:
-            raise ValueError(f"이미지 앵커 문구를 본문에서 찾지 못했습니다: {snippet}")
-    return result
+    return _insert_after_anchors(blocks, anchors, lambda path: {"type": "image", "path": path})
