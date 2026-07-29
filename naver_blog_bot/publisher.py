@@ -395,6 +395,46 @@ def click_save(page: Page, retries: int = 3):
     raise RuntimeError(f"저장이 {retries}회 연속 실패했습니다.")
 
 
+def open_editor_with_relogin(page: Page, context, blog_id: str, headless: bool):
+    """글쓰기 페이지로 이동한다. 저장된 세션이 만료되어 로그인 페이지로
+    돌려보내지면, (headless가 아닐 경우) 그 자리에서 사용자가 직접
+    로그인하도록 기다렸다가 세션을 새로 저장하고 이어서 진행한다.
+    login_setup.py를 따로 실행하고 전체를 재실행하지 않아도 되게 하기 위함.
+    """
+    url = f"https://blog.naver.com/{blog_id}/postwrite"
+    page.goto(url)
+    try:
+        page.locator(".se-title-text").first.wait_for(state="visible", timeout=30000)
+        return
+    except PWTimeout:
+        if "nid.naver.com" not in page.url:
+            raise
+
+    if headless:
+        raise RuntimeError(
+            "저장된 로그인 세션이 만료되었습니다. headless=True 라서 이 자리에서\n"
+            "로그인을 받을 수 없으니, headless=False 로 한 번 실행해 재로그인하세요."
+        )
+
+    print("=" * 60)
+    print("저장된 로그인 세션이 만료되어 네이버가 로그인 페이지로 돌려보냈습니다.")
+    print("지금 뜬 브라우저 창에서 직접 로그인해주세요 (2단계 인증 포함).")
+    print("로그인 완료 후 이 터미널로 돌아와 Enter를 누르면 세션을 새로")
+    print("저장하고 이어서 자동으로 진행합니다.")
+    print("=" * 60)
+    input("로그인을 마쳤으면 Enter >> ")
+
+    cookies = context.cookies()
+    if not any(c["name"] == "NID_SES" for c in cookies):
+        raise RuntimeError("로그인이 확인되지 않았습니다. 완전히 로그인한 뒤 다시 실행하세요.")
+
+    context.storage_state(path=SESSION_FILE)
+    print(f"세션을 새로 저장했습니다: {SESSION_FILE}")
+
+    page.goto(url)
+    page.locator(".se-title-text").first.wait_for(state="visible", timeout=30000)
+
+
 def publish_post(
     title: str,
     blog_id: str,
@@ -432,19 +472,7 @@ def publish_post(
         )
         page = context.new_page()
 
-        page.goto(f"https://blog.naver.com/{blog_id}/postwrite")
-        # networkidle은 지속적으로 폴링/자동저장 요청이 있는 SPA에서 잘 안 맞으므로
-        # 에디터의 실제 진입점 요소가 뜨는 것을 기준으로 삼는다.
-        try:
-            page.locator(".se-title-text").first.wait_for(state="visible", timeout=30000)
-        except PWTimeout:
-            if "nid.naver.com" in page.url:
-                browser.close()
-                raise RuntimeError(
-                    "저장된 로그인 세션이 만료되어 네이버가 로그인 페이지로 돌려보냈습니다.\n"
-                    "login_setup.py 를 다시 실행해서 세션을 새로 저장한 뒤 재시도하세요."
-                )
-            raise
+        open_editor_with_relogin(page, context, blog_id, headless)
 
         try:
             debug_dump(page, "01_initial", debug)
