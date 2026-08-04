@@ -12,13 +12,17 @@
   ==텍스트==        -> 강조색 (동일 처리)
   {링크=URL}텍스트{링크} -> 텍스트는 일반 텍스트로 남기고,
                         해당 문단 그룹이 끝난 뒤 링크 카드 삽입
+  (URL) 단독 줄      -> {링크=}와 동일하게 링크 카드로 삽입 (줄 전체가
+                        "(https://...)" 형태인 경우)
   빈 줄             -> 문단 그룹 구분 (그룹 사이에만 빈 줄 여백)
   [해시태그] 섹션    -> #태그들 추출, 이후 본문 아님
-  [권장 사진]/[글의 목적] -> 지시사항이므로 본문에서 제외
   [링크 걸 위치] 섹션 -> 줄 형식: - "앵커문구" (설명) → URL
                         해당 앵커문구가 있는 블록 바로 뒤에 링크 카드 삽입.
                         URL이 http(s)로 시작하지 않으면(아직 미확정 등)
                         명확한 오류로 알려준다.
+  그 외 [...] 섹션   -> ([권장 사진]/[글의 목적]/[제목 후보]/[제목]/[링크] 등)
+                        전부 지시사항으로 간주해 본문에서 제외 (화이트리스트가
+                        아니라 기본값이 "제외"이므로 새 섹션 이름이 나와도 안전)
 
 원고 내 줄바꿈 호흡을 살리기 위해, 그룹 안의 각 줄은 빈 줄 없이 이어지고
 그룹이 끝날 때만 빈 줄이 들어간다.
@@ -32,6 +36,7 @@ DEFAULT_EMPHASIS_COLOR = "#ff0010"
 _INLINE_PATTERN = re.compile(r"(\*\*(.+?)\*\*|\{색\}(.+?)\{색\}|==(.+?)==)", re.DOTALL)
 _LINK_PATTERN = re.compile(r"\{링크=([^}]+)\}(.*?)\{링크\}", re.DOTALL)
 _LINK_POSITION_PATTERN = re.compile(r'-\s*"([^"]+)"[^→]*→\s*(.+)$')
+_BARE_LINK_LINE_PATTERN = re.compile(r"^\((https?://\S+)\)$")
 
 
 def parse_inline_block(text: str, emphasis_color: str) -> tuple[list[dict], list[str]]:
@@ -142,11 +147,22 @@ def parse_manuscript(path: str, emphasis_color: str = DEFAULT_EMPHASIS_COLOR):
             if m:
                 link_positions.append((m.group(1), m.group(2).strip()))
             continue
-        if meta_section in ("[권장 사진]", "[글의 목적]", "[제목 후보 — 원장님이 확정]"):
-            continue  # 지시사항 — 본문에 넣지 않음
+        if meta_section is not None:
+            # [해시태그]/[링크 걸 위치] 외의 모든 대괄호 섹션([권장 사진],
+            # [글의 목적], [제목 후보], [제목], [링크] 등)은 매번 새 이름이
+            # 나올 수 있으므로 화이트리스트 대신 기본적으로 전부
+            # 본문에서 제외한다(지시사항으로 간주).
+            continue
 
         if not stripped:
             flush_group()
+            continue
+
+        bare_link_match = _BARE_LINK_LINE_PATTERN.match(stripped)
+        if bare_link_match:
+            # 본문 줄 전체가 "(https://...)" 형태인 경우: 그 URL을
+            # {링크=}와 동일하게 현재 문단 그룹 뒤에 링크 카드로 삽입한다.
+            pending_links.append(bare_link_match.group(1))
             continue
 
         if stripped.startswith("# ") and title is None:
