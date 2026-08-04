@@ -37,6 +37,7 @@
 오류 시 debug_output/error_screenshot.png 와 error_traceback.txt 를 보고 다시 보정하세요.
 """
 
+import random
 import re
 import traceback
 from pathlib import Path
@@ -112,10 +113,31 @@ def dismiss_help_panel(page: Page):
         print("도움말 패널이 감지되지 않았습니다 (없었거나 이미 닫혀있음).")
 
 
+TYPING_DELAY_MIN_MS = 20  # 글자당 최소 간격
+TYPING_DELAY_MAX_MS = 90  # 글자당 최대 간격
+_PAUSE_CHARS = set(",.!?~\n·")  # 이 문자 다음엔 가끔 더 긴 멈춤을 섞는다
+_PAUSE_EXTRA_MS = (150, 450)
+_PAUSE_CHANCE = 0.35
+
+
+def human_type(page: Page, typer, text: str):
+    """typer(글자, delay=ms)를 한 글자씩 무작위 간격으로 호출해 타이핑한다.
+
+    매번 같은 25ms 간격으로 타이핑하면 패턴이 기계적으로 보일 수 있어,
+    글자마다 간격을 무작위화하고 문장부호 뒤에는 가끔 조금 더 긴
+    "생각하는" 멈춤을 섞는다. typer는 page.keyboard.type 이나 특정
+    입력창의 locator.type 등, (문자열, delay=ms)를 받는 아무 호출이나 된다.
+    """
+    for ch in text:
+        typer(ch, delay=random.randint(TYPING_DELAY_MIN_MS, TYPING_DELAY_MAX_MS))
+        if ch in _PAUSE_CHARS and random.random() < _PAUSE_CHANCE:
+            page.wait_for_timeout(random.randint(*_PAUSE_EXTRA_MS))
+
+
 def type_title(page: Page, title: str):
     title_area = page.locator(".se-title-text .se-text-paragraph").first
     title_area.click()
-    page.keyboard.type(title, delay=50)
+    human_type(page, page.keyboard.type, title)
 
 
 # ---------------------------------------------------------------------------
@@ -135,7 +157,6 @@ def apply_font_color(page: Page, hex_color: str):
 DEFAULT_TEXT_COLOR = "#000000"
 
 
-TYPING_DELAY_MS = 25  # 키 입력 간격. 너무 빠르면 에디터/서버가 따라오지 못한다.
 ACTION_PAUSE_MS = 900  # 툴바 클릭/단축키 등 동작 사이의 여유 시간.
 
 
@@ -156,7 +177,7 @@ def type_run(page: Page, run: dict):
         apply_font_color(page, color)
         page.wait_for_timeout(ACTION_PAUSE_MS)
 
-    page.keyboard.type(text, delay=TYPING_DELAY_MS)
+    human_type(page, page.keyboard.type, text)
     page.wait_for_timeout(ACTION_PAUSE_MS)  # 타이핑이 에디터에 반영될 시간을 줌
 
     if bold:
@@ -184,7 +205,7 @@ def set_current_line_style(page: Page, value: str):
 
 
 def type_subheading(page: Page, text: str):
-    page.keyboard.type(text, delay=TYPING_DELAY_MS)
+    human_type(page, page.keyboard.type, text)
     set_current_line_style(page, "sectionTitle")
     page.keyboard.press("Enter")
     set_current_line_style(page, "text")  # 다음 줄은 다시 본문 스타일로
@@ -201,7 +222,7 @@ def type_quote(page: Page, text: str):
     set_current_line_style(page, "quotation")
     page.wait_for_timeout(ACTION_PAUSE_MS)
     # 인용구 블록 삽입과 동시에 '내용을 입력하세요' 입력란에 포커스가 가 있다.
-    page.keyboard.type(text, delay=TYPING_DELAY_MS)
+    human_type(page, page.keyboard.type, text)
     # 인용구 내용칸 안에서는 Escape/Enter가 블록을 못 벗어나고 내용칸 안에
     # 문단만 계속 쌓인다. type_quote 호출 시점엔 인용구가 항상 지금까지
     # 작성한 내용의 맨 끝이므로, 문서 맨 끝의 '본문 추가' 버튼을 눌러
@@ -344,7 +365,7 @@ def set_tags(page: Page, tags: list[str]):
     tag_input = page.locator("input#tag-input:visible").first
     for tag in tags:
         tag_input.click()
-        tag_input.type(tag, delay=TYPING_DELAY_MS)
+        human_type(page, tag_input.type, tag)
         page.keyboard.press("Enter")
 
 
