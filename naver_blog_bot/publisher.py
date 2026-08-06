@@ -145,7 +145,7 @@ def type_title(page: Page, title: str):
 # ---------------------------------------------------------------------------
 
 def apply_font_color(page: Page, hex_color: str):
-    """커서의 '펜' 색을 바꾼다. 선택 영역이 없어도 이후 타이핑에 적용된다."""
+    """선택 영역(또는 커서)의 글자색을 바꾼다."""
     page.locator(
         'button[data-group="propertyToolbar"][data-name="font-color"]:visible'
     ).first.click()
@@ -154,38 +154,93 @@ def apply_font_color(page: Page, hex_color: str):
     ).first.click()
 
 
-DEFAULT_TEXT_COLOR = "#000000"
-
-
 ACTION_PAUSE_MS = 900  # 툴바 클릭/단축키 등 동작 사이의 여유 시간.
 
 
+def select_backward(page: Page, length: int):
+    """방금 타이핑한 마지막 length자를 뒤에서부터 선택."""
+    for _ in range(length):
+        page.keyboard.press("Shift+ArrowLeft")
+
+
+def _is_bold_selection(page: Page) -> bool:
+    """현재 '실제 선택 영역'이 볼드인지 확인한다.
+
+    document.queryCommandState('bold')는 네이버 에디터가 브라우저 네이티브
+    execCommand 기반이 아니라 자체 로직으로 Ctrl+B를 처리해서 실제 상태와
+    안 맞았다. 대신 볼드 툴바 버튼의 활성 클래스(se-is-selected)를 읽는다
+    — 예전에 이 방식이 틀렸던 건 '빈 커서' 상태에서 확인해서 숨겨진 사본과
+    혼동됐기 때문이고, 지금은 방금 타이핑한 실제 텍스트가 선택된 상태에서
+    확인하므로 툴바가 그 선택 영역을 정확히 반영한다.
+    """
+    btn = page.locator(
+        'button[data-group="propertyToolbar"][data-name="bold"]:visible'
+    ).first
+    cls = btn.get_attribute("class") or ""
+    return "se-is-selected" in cls
+
+
 def type_run(page: Page, run: dict):
-    """타이핑 후 드래그로 선택해 서식을 입히는 방식은 타이핑이 에디터에
-    완전히 반영되기 전에 선택 동작이 끼어드는 race condition으로 텍스트가
-    사라지는 문제가 있었다. 그래서 서식(볼드/색)을 먼저 켠 상태로 타이핑하고,
-    끝나면 다시 꺼서 다음 텍스트에 영향이 없도록 하는 방식으로 바꿨다.
+    """타이핑 후 충분히 대기했다가, 방금 쓴 부분을 선택해서 서식을 명시적
+    으로 맞춘다 — 볼드/색이 있는 run뿐 아니라 '일반' run도 매번 검정색을
+    명시적으로 적용한다. 앞의 강조 텍스트 뒤에 이어 타이핑하면 서식이
+    그대로 새어나가는 문제가 있어서(여러 다른 방법으로도 못 잡음), 모든
+    run이 각자 자기 서식을 명시적인 선택+명령으로 "선언"하게 만들어
+    애매한 상태 자체를 없앴다. 색 지정은 토글이 아니라 매번 적용해도
+    안전하지만, 볼드(Ctrl+B)는 토글이라 실제 선택 영역의 상태를 확인해서
+    다를 때만 누른다. 문단 '끝'(뒤에 Enter/구분선이 오는 경우)에 대한
+    추가 보강은 seal_line_end() 참고.
+    (과거 드래그 선택 방식에서 텍스트가 사라지던 문제는 타이핑 직후 바로
+    선택해서 생긴 race condition이었고, 지금처럼 타이핑 후 충분히
+    대기하면 괜찮다는 것을 확인함.)
     """
     text = run["text"]
-    bold = run.get("bold")
-    color = run.get("color")
-
-    if bold:
-        page.keyboard.press("Control+b")
-        page.wait_for_timeout(ACTION_PAUSE_MS)
-    if color:
-        apply_font_color(page, color)
-        page.wait_for_timeout(ACTION_PAUSE_MS)
+    bold = bool(run.get("bold"))
+    color = run.get("color") or "#000000"
 
     human_type(page, page.keyboard.type, text)
     page.wait_for_timeout(ACTION_PAUSE_MS)  # 타이핑이 에디터에 반영될 시간을 줌
 
-    if bold:
+    select_backward(page, len(text))
+    page.wait_for_timeout(ACTION_PAUSE_MS)
+
+    if _is_bold_selection(page) != bold:
+        page.keyboard.press("Control+b")
+        page.wait_for_timeout(ACTION_PAUSE_MS)
+
+    apply_font_color(page, color)
+    page.wait_for_timeout(ACTION_PAUSE_MS)
+
+    page.keyboard.press("ArrowRight")  # 선택 해제, 커서를 텍스트 뒤로 이동
+    page.wait_for_timeout(ACTION_PAUSE_MS)
+
+
+def seal_line_end(page: Page, bold: bool, color: bool):
+    """볼드/색 텍스트로 문단이 끝나면, 그 뒤 Enter로 새 줄(또는 구분선
+    분할)이 만들어질 때 그 서식이 그대로 이어지는 문제가 있었다
+    (type_run의 자기-교정만으로는 안 잡힘 — 그건 run 자신의 서식만
+    보장하지, Enter가 그 뒤에 만드는 새 줄까지는 못 막는다). 그래서
+    스페이스 한 칸을 추가로 치고, 그 칸만 명시적으로 선택해서 일반
+    서식으로 되돌려 문단 끝을 "봉인"한다. 문단의 '마지막' run이 볼드/색일
+    때만 호출해야 한다 — 뒤에 이어지는 텍스트가 있는 경우(예: "힘"+"이
+    있습니다") 불필요한 공백이 끼어들기 때문이다. (zero-width space는
+    Playwright의 Shift+ArrowLeft 선택 계산을 어긋나게 해 문단이 뒤섞이는
+    심각한 문제가 있어 일반 스페이스를 쓴다.)
+    """
+    page.keyboard.type(" ", delay=30)
+    page.wait_for_timeout(ACTION_PAUSE_MS)
+    select_backward(page, 1)
+    page.wait_for_timeout(ACTION_PAUSE_MS)
+    if bold and _is_bold_selection(page):
         page.keyboard.press("Control+b")
         page.wait_for_timeout(ACTION_PAUSE_MS)
     if color:
-        apply_font_color(page, DEFAULT_TEXT_COLOR)
+        apply_font_color(page, "#000000")
         page.wait_for_timeout(ACTION_PAUSE_MS)
+    page.keyboard.press("ArrowRight")
+    page.wait_for_timeout(ACTION_PAUSE_MS)
+    # 주의: 이 봉인용 스페이스는 지우면 안 된다 — 지우면 "마지막 글자"가
+    # 다시 볼드/색 텍스트로 되돌아가 버려서 봉인 의미가 없어진다.
 
 
 # ---------------------------------------------------------------------------
@@ -318,6 +373,9 @@ def type_content_blocks(page: Page, blocks: list[dict]):
         if btype == "paragraph":
             for run in block["runs"]:
                 type_run(page, run)
+            last_run = block["runs"][-1] if block["runs"] else {}
+            if last_run.get("bold") or last_run.get("color"):
+                seal_line_end(page, bold=bool(last_run.get("bold")), color=bool(last_run.get("color")))
             page.keyboard.press("Enter")
             # 문단 사이에 빈 줄을 넣어 여백을 준다 (blank_after: false로 끌 수 있음)
             if block.get("blank_after", True):
