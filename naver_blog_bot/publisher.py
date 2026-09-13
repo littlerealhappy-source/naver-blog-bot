@@ -486,7 +486,19 @@ def open_editor_with_relogin(page: Page, context, blog_id: str, headless: bool):
         page.locator(".se-title-text").first.wait_for(state="visible", timeout=30000)
         return
     except PWTimeout:
+        # 로그인 만료 리다이렉트가 우리가 확인하는 시점엔 아직 안 끝나
+        # 있을 수 있어(비동기), 잠깐 기다렸다가 다시 확인한다.
+        page.wait_for_timeout(2000)
         if "nid.naver.com" not in page.url:
+            # 로그인 만료가 아닌 다른 이유로 에디터가 안 뜬 경우라
+            # 원인 파악용으로 화면과 주소를 남겨둔다.
+            DEBUG_DIR.mkdir(exist_ok=True)
+            page.screenshot(path=str(DEBUG_DIR / "error_editor_load_timeout.png"), full_page=True)
+            (DEBUG_DIR / "error_editor_load_timeout.txt").write_text(
+                f"현재 페이지 주소: {page.url}\n", encoding="utf-8"
+            )
+            print(f"글쓰기 페이지 로딩 실패. 현재 주소: {page.url}")
+            print(f"디버깅용 스크린샷: {DEBUG_DIR}/error_editor_load_timeout.png")
             raise
 
     if headless:
