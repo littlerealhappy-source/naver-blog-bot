@@ -8,7 +8,7 @@
 from manuscript_parser import parse_manuscript, insert_images_at_anchors
 from publisher import publish_post
 
-MANUSCRIPT = r"C:\Users\SAMSUNG\Downloads\7월3주_A_체외충격파석회성건염_원고.md"
+MANUSCRIPT = "manuscripts/7월3주_A_체외충격파석회성건염_원고.md"
 
 # [권장 사진] 지시 기준 배치 (자리표시 이미지 — 발행 전 실제 사진으로 교체)
 IMAGE_ANCHORS = [

@@ -12,7 +12,7 @@
 from manuscript_parser import parse_manuscript, insert_images_at_anchors
 from publisher import publish_post
 
-MANUSCRIPT = r"C:\Users\SAMSUNG\Downloads\7월4주_A_손저림_원고 (1).md"
+MANUSCRIPT = "manuscripts/7월4주_A_손저림_원고.md"
 TITLE = "손이 저릴때, 손목만 봐서는 낫지 않는 진짜 이유"
 
 # [권장 사진] 지시 기준 배치 (자리표시 이미지 — 발행 전 실제 사진으로 교체)

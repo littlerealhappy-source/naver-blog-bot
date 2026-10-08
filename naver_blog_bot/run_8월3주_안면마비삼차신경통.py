@@ -14,7 +14,7 @@
 from manuscript_parser import parse_manuscript, insert_images_at_anchors
 from publisher import publish_post
 
-MANUSCRIPT = r"C:\Users\SAMSUNG\Downloads\8월3주_A_안면마비삼차신경통_원고.md"
+MANUSCRIPT = "manuscripts/8월3주_A_안면마비삼차신경통_원고.md"
 TITLE = "삼차신경통과 안면마비, 얼굴 문제라고 다 같지 않습니다"
 
 # [권장 사진] 지시 기준 배치 (자리표시 이미지 — 발행 전 실제 사진으로 교체)

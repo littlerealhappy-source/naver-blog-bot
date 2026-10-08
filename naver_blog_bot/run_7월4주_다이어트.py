@@ -11,7 +11,7 @@
 from manuscript_parser import parse_manuscript, insert_images_at_anchors
 from publisher import publish_post
 
-MANUSCRIPT = r"C:\Users\SAMSUNG\Downloads\7월4주_B_다이어트_원고.md"
+MANUSCRIPT = "manuscripts/7월4주_B_다이어트_원고.md"
 TITLE = "나잇살이 안 빠지는 건 의지가 아니라 근육 문제입니다"
 
 # [권장 사진] 지시 기준 배치 (자리표시 이미지 — 발행 전 실제 사진으로 교체)

@@ -14,7 +14,7 @@
 from manuscript_parser import parse_manuscript, insert_images_at_anchors
 from publisher import publish_post
 
-MANUSCRIPT = r"C:\Users\SAMSUNG\Downloads\8월2주_B_기능성소화불량_원고.md"
+MANUSCRIPT = "manuscripts/8월2주_B_기능성소화불량_원고.md"
 TITLE = "내시경은 정상인데 속이 계속 더부룩하다면 (기능성 소화불량·담적)"
 
 # [권장 사진] 지시 기준 배치 (자리표시 이미지 — 발행 전 실제 사진으로 교체)

@@ -11,7 +11,7 @@
 from manuscript_parser import parse_manuscript, insert_images_at_anchors
 from publisher import publish_post
 
-MANUSCRIPT = r"C:\Users\SAMSUNG\Downloads\8월2주_A_목디스크_원고.md"
+MANUSCRIPT = "manuscripts/8월2주_A_목디스크_원고.md"
 TITLE = "부천한의원 목디스크 이렇게 접근해야 빨리 낫습니다."
 
 # [권장 사진] 지시 기준 배치 (자리표시 이미지 — 발행 전 실제 사진으로 교체)

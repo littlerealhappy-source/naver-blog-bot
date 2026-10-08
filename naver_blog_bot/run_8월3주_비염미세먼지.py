@@ -15,7 +15,7 @@
 from manuscript_parser import parse_manuscript, insert_images_at_anchors
 from publisher import publish_post
 
-MANUSCRIPT = r"C:\Users\SAMSUNG\Downloads\8월3주_B_비염미세먼지_원고 (1).md"
+MANUSCRIPT = "manuscripts/8월3주_B_비염미세먼지_원고.md"
 TITLE = "미세먼지와 비염, 한의사가 직접 연구해봤습니다"
 
 # [권장 사진] 지시 기준 배치 (자리표시 이미지 — 발행 전 실제 사진으로 교체)
