@@ -233,7 +233,14 @@ def _insert_after_anchors(blocks: list[dict], anchors: list[tuple[str, str]], ma
     return result
 
 
-def insert_images_at_anchors(blocks: list[dict], anchors: list[tuple[str, str]]):
-    """anchors: (본문 일부 문자열, 이미지 경로). 해당 문자열이 포함된
+def insert_images_at_anchors(blocks: list[dict], anchors: list[tuple]):
+    """anchors: (본문 일부 문자열, 이미지 경로[, 사진 설명]). 해당 문자열이 포함된
     블록 바로 뒤에 이미지 블록을 삽입한 새 리스트를 반환."""
-    return _insert_after_anchors(blocks, anchors, lambda path: {"type": "image", "path": path})
+
+    def make_image(path_and_caption: tuple) -> dict:
+        block = {"type": "image", "path": path_and_caption[0]}
+        if len(path_and_caption) > 1 and path_and_caption[1]:
+            block["caption"] = path_and_caption[1]
+        return block
+
+    return _insert_after_anchors(blocks, [(a[0], tuple(a[1:])) for a in anchors], make_image)

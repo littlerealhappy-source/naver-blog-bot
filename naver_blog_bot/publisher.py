@@ -31,7 +31,7 @@
   {"type": "subheading", "text": "..."}
   {"type": "quote", "text": "..."}   (text 안의 줄바꿈은 한 인용구 박스 안의 여러 줄)
   {"type": "divider"}
-  {"type": "image", "path": "..."}
+  {"type": "image", "path": "...", "caption": "..."}   (caption은 없어도 됨)
   {"type": "link_card", "url": "..."}
 
 주의: 네이버가 화면 구조를 바꾸면 이 셀렉터들도 깨질 수 있습니다.
@@ -338,6 +338,51 @@ def insert_image(page: Page, image_path: str, retries: int = 3):
     raise RuntimeError(f"이미지 업로드가 {retries}회 연속 실패했습니다: {image_path}")
 
 
+def _caret_inside(page: Page, box) -> bool:
+    """에디터가 직접 그리는 커서가 box 영역 안에 있는지 화면 좌표로 확인한다."""
+    caret = page.locator("svg.se-caret:not(.se-caret-drop)").first
+    try:
+        c = caret.bounding_box(timeout=2000)
+        b = box.bounding_box(timeout=2000)
+    except PWTimeout:
+        return False
+    if not c or not b:
+        return False
+    cx, cy = c["x"] + c["width"] / 2, c["y"] + c["height"] / 2
+    return b["x"] - 2 <= cx <= b["x"] + b["width"] + 2 and b["y"] - 2 <= cy <= b["y"] + b["height"] + 2
+
+
+def fill_image_captions(page: Page, captions: list[str | None]):
+    """본문을 다 쓴 뒤 사진 설명칸을 문서 순서대로 채운다."""
+    if not any(captions):
+        return
+    images = page.locator(".se-component.se-image:visible")
+    if images.count() != len(captions):
+        print(f"사진 설명 입력을 건너뜁니다: 본문 사진 {images.count()}장, 설명 {len(captions)}개")
+        return
+
+    for number, caption in enumerate(captions, start=1):
+        if not caption:
+            continue
+        box = images.nth(number - 1).locator(".se-module-text.se-caption").first
+        try:
+            box.locator(".se-text-paragraph").first.click(timeout=5000)
+        except PWTimeout:
+            print(f"사진 {number} 설명칸을 누르지 못했습니다. 직접 입력해 주세요: {caption}")
+            continue
+        page.wait_for_timeout(ACTION_PAUSE_MS)
+        # 키 입력은 화면 밖 숨은 입력칸이 받으므로 브라우저 선택 영역으로는 커서 위치를
+        # 알 수 없다. 커서가 설명칸 밖이면 본문에 글자가 섞이니 확인될 때만 친다.
+        if not _caret_inside(page, box):
+            print(f"사진 {number} 설명칸에 커서가 들어가지 않아 건너뜁니다. 직접 입력해 주세요: {caption}")
+            continue
+        human_type(page, page.keyboard.type, caption)
+        typed = box.inner_text()
+        # 에디터가 띄어쓰기를 줄바꿈 없는 공백(\xa0)으로 바꿔 넣을 수 있어 공백 종류는 무시한다.
+        if " ".join(caption.split()) not in " ".join(typed.split()):
+            print(f"사진 {number} 설명이 다르게 들어갔습니다: {typed!r} (원래 문구: {caption})")
+
+
 def insert_link_card(page: Page, url: str):
     page.locator(
         'button[data-group="documentToolbar"][data-name="oglink"]:visible'
@@ -582,6 +627,8 @@ def publish_post(
             debug_dump(page, "03_after_typing", debug)
 
             dismiss_help_panel(page)
+            # 쓰는 도중 설명칸을 오가면 본문 커서가 틀어질 수 있어 마지막에 한 번에 채운다.
+            fill_image_captions(page, [b.get("caption") for b in blocks if b["type"] == "image"])
             debug_dump(page, "04_after_help_dismiss", debug)
 
             if publish:

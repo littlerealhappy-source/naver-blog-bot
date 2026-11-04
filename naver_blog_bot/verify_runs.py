@@ -10,6 +10,7 @@ run 스크립트 오프라인 검증. 네이버에 접속하지 않고 원고 �
 """
 
 import importlib.util
+import re
 import sys
 from pathlib import Path
 
@@ -27,6 +28,23 @@ def block_text(block: dict) -> str:
     if block.get("type") == "paragraph":
         return "".join(run.get("text", "") for run in block.get("runs", []))
     return block.get("text") or block.get("url") or block.get("path") or ""
+
+
+def expected_captions(manuscript: Path) -> list[str] | None:
+    """[권장 사진]이 사진 설명칸 형식이면 괄호 안 문구를 순서대로 돌려준다."""
+    lines = manuscript.read_text(encoding="utf-8").splitlines()
+    for i, line in enumerate(lines):
+        if not line.startswith("[권장 사진]"):
+            continue
+        if "사진 설명칸" not in line:
+            return None
+        captions: list[str] = []
+        for item in lines[i + 1:]:
+            if not item.strip() or item.startswith("["):
+                break
+            captions.extend(c.strip() for c in re.findall(r"\(([^()]+)\)", item))
+        return captions
+    return None
 
 
 def load_run_script(path: Path):
@@ -49,12 +67,18 @@ def check_script(path: Path, detail: bool, lines: list[str]) -> list[str]:
     anchors = getattr(module, "IMAGE_ANCHORS", [])
     body = "\n".join(block_text(b) for b in blocks)
 
-    for anchor, image in anchors:
+    for anchor, image, *_ in anchors:
         count = body.count(anchor)
         if count != 1:
             problems.append(f"앵커 {count}회: {anchor!r}")
         if not (BOT / image).exists():
             problems.append(f"사진 없음: {image}")
+
+    wanted_captions = expected_captions(manuscript)
+    if wanted_captions is not None:
+        given = [a[2] if len(a) > 2 else None for a in anchors]
+        if given != wanted_captions:
+            problems.append(f"사진 설명이 원고 [권장 사진]과 다름: 스크립트 {given} / 원고 {wanted_captions}")
 
     placed = insert_images_at_anchors(blocks, anchors) if anchors else blocks
     types = [b["type"] for b in placed]
@@ -81,8 +105,8 @@ def check_script(path: Path, detail: bool, lines: list[str]) -> list[str]:
 
     if detail:
         lines.append(f"    태그: {tags}")
-        for a, image in anchors:
-            lines.append(f"    앵커 {body.count(a)}회  {a!r} -> {image}")
+        for a, image, *caption in anchors:
+            lines.append(f"    앵커 {body.count(a)}회  {a!r} -> {image}  설명 {caption[0] if caption else None!r}")
         for i, block in enumerate(placed):
             kind = block["type"]
             if kind == "paragraph":
