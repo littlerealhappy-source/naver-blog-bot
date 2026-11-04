@@ -102,6 +102,7 @@ def parse_manuscript(path: str, emphasis_color: str = DEFAULT_EMPHASIS_COLOR):
     group: list[str] = []  # 현재 문단 그룹의 원본 줄들
     pending_links: list[str] = []
     meta_section: str | None = None  # [해시태그] 등 메타 섹션 진입 여부
+    prev_was_quote = False
 
     def flush_group():
         nonlocal group, pending_links
@@ -129,6 +130,9 @@ def parse_manuscript(path: str, emphasis_color: str = DEFAULT_EMPHASIS_COLOR):
     for raw_line in lines:
         line = raw_line.rstrip()
         stripped = line.strip()
+        is_quote_line = stripped.startswith("> ")
+        continues_quote = is_quote_line and prev_was_quote
+        prev_was_quote = is_quote_line
 
         # 메타 섹션 처리. "[링크 걸 위치] (2곳만)"처럼 대괄호 뒤에 부가
         # 설명이 붙는 경우가 있어, 줄 전체가 아니라 첫 "[...]" 부분만
@@ -178,10 +182,14 @@ def parse_manuscript(path: str, emphasis_color: str = DEFAULT_EMPHASIS_COLOR):
         if stripped == "---":
             continue  # 소제목 앞 구분선은 자동으로 넣으므로 무시
 
-        if stripped.startswith("> "):
+        if is_quote_line:
             flush_group()
             quote_text = stripped[2:].strip()
-            blocks.append({"type": "quote", "text": quote_text})
+            if continues_quote:
+                # 빈 줄 없이 이어진 "> " 줄들은 인용구 한 박스 안의 여러 줄이다.
+                blocks[-1]["text"] += "\n" + quote_text
+            else:
+                blocks.append({"type": "quote", "text": quote_text})
             continue
 
         group.append(stripped)

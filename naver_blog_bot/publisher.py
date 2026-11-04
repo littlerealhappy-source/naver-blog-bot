@@ -29,6 +29,7 @@
 콘텐츠는 블록 리스트로 표현한다 (자세한 형식은 make_paragraph_blocks 등 참고):
   {"type": "paragraph", "runs": [{"text": "..."}, {"text": "...", "color": "#ff0010"}]}
   {"type": "subheading", "text": "..."}
+  {"type": "quote", "text": "..."}   (text 안의 줄바꿈은 한 인용구 박스 안의 여러 줄)
   {"type": "divider"}
   {"type": "image", "path": "..."}
   {"type": "link_card", "url": "..."}
@@ -277,7 +278,13 @@ def type_quote(page: Page, text: str):
     set_current_line_style(page, "quotation")
     page.wait_for_timeout(ACTION_PAUSE_MS)
     # 인용구 블록 삽입과 동시에 '내용을 입력하세요' 입력란에 포커스가 가 있다.
-    human_type(page, page.keyboard.type, text)
+    # 여러 줄이면 Enter로 이어 쓴다. 내용칸 안의 Enter는 박스를 벗어나지 않고
+    # 같은 박스 안에 문단을 쌓는다(아래 주석의 관찰 결과).
+    for i, line in enumerate(text.split("\n")):
+        if i:
+            page.keyboard.press("Enter")
+            page.wait_for_timeout(ACTION_PAUSE_MS)
+        human_type(page, page.keyboard.type, line)
     # 인용구 내용칸 안에서는 Escape/Enter가 블록을 못 벗어나고 내용칸 안에
     # 문단만 계속 쌓인다. type_quote 호출 시점엔 인용구가 항상 지금까지
     # 작성한 내용의 맨 끝이므로, 문서 맨 끝의 '본문 추가' 버튼을 눌러
